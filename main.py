@@ -15,8 +15,7 @@ from telegram.ext import (
 # استيراد المعالجات والخدمات
 from app.handlers.message_handler import MessageHandler
 from app.handlers.admin_handler import AdminHandler, AdvancedFeatures
-from app.handlers.cleanup_handler import CleanupCommandHandler
-# from app.handlers.feedback_handler import FeedbackHandler  # تم إزالتها
+from app.handlers.cleanup_handler import ImprovedCleanupHandler
 from app.utils.commands import CommandRegistry
 from app.models.init_db import init_db, SessionLocal
 
@@ -79,14 +78,10 @@ def setup_handlers(application: Application):
     application.add_handler(CommandHandler("keywords", advanced_features.list_keywords))
     
     # ===== أوامر التنظيف =====
-    cleanup_handlers = CleanupCommandHandler.get_handlers()
-    for handler in cleanup_handlers:
-        application.add_handler(handler)
-    
-        # ===== أوامر التغذية الراجعة والتعلم الذاتي =====
-    feedback_handlers = FeedbackHandler.get_handlers()
-    for handler in feedback_handlers:
-        application.add_handler(handler)
+    cleanup_handler = ImprovedCleanupHandler()
+    application.add_handler(CommandHandler("cleanup_old", cleanup_handler.cleanup_old_messages))
+    application.add_handler(CommandHandler("cleanup_user", cleanup_handler.cleanup_user_messages))
+    application.add_handler(CommandHandler("archive", cleanup_handler.archive_summary))
     
     # ===== معالج الرسائل العام =====
     application.add_handler(
