@@ -38,7 +38,7 @@
 
 1. **استنساخ المشروع**
 ```bash
-git clone [<repository-url>](https://github.com/mohmmd-A/telegram-spam-bot.git)
+git clone https://github.com/mohmmd-A/telegram-spam-bot.git
 cd telegram_spam_bot
 ```
 
