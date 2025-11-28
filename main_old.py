@@ -1,18 +1,14 @@
-#!/usr/bin/env python3
 """
-🤖 بوت حذف الإعلانات المزعجة - ملف البدء الرئيسي
-Telegram Spam Killer Bot - Main Entry Point
+ملف البدء الرئيسي - النسخة المبسطة والمصححة
+Main Entry Point - Simplified and Fixed Version
 """
 
 import os
-import sys
 import logging
 from dotenv import load_dotenv
 from telegram.ext import (
     Application, CommandHandler, MessageHandler as TgMessageHandler, filters
 )
-
-# استيراد المعالجات
 from app.handlers.message_handler import MessageHandler
 from app.handlers.admin_handler import AdminHandler, AdvancedFeatures
 from app.handlers.cleanup_handler import CleanupCommandHandler
@@ -31,13 +27,40 @@ load_dotenv()
 
 async def post_init(application: Application) -> None:
     """تهيئة البوت بعد الإنشاء"""
+    logger.info("🚀 جاري تهيئة البوت...")
+    
     try:
         # تسجيل الأوامر في تلقرام
         commands = CommandRegistry.get_all_bot_commands()
         await application.bot.set_my_commands(commands)
+        
         logger.info(f"✅ تم تسجيل {len(commands)} أمر بنجاح")
         
-        # طباعة رسالة البدء
+        # طباعة الأوامر المسجلة
+        print("\n" + "="*70)
+        print("📋 الأوامر المسجلة والمتاحة:")
+        print("="*70)
+        
+        print("\n🟢 الأوامر العامة:")
+        for cmd in CommandRegistry.get_general_commands():
+            print(f"  /{cmd.command:<20} - {cmd.description}")
+        
+        print("\n🔵 أوامر المسؤولين:")
+        for cmd in CommandRegistry.get_admin_commands():
+            print(f"  /{cmd.command:<20} - {cmd.description}")
+        
+        print("\n🟡 أوامر التنظيف:")
+        for cmd in CommandRegistry.get_cleanup_commands():
+            print(f"  /{cmd.command:<20} - {cmd.description}")
+        
+        print("\n🟣 أوامر الكلمات المفتاحية:")
+        for cmd in CommandRegistry.get_keyword_commands():
+            print(f"  /{cmd.command:<20} - {cmd.description}")
+        
+        print("\n🟠 الأوامر المتقدمة:")
+        for cmd in CommandRegistry.get_advanced_commands():
+            print(f"  /{cmd.command:<20} - {cmd.description}")
+        
         print("\n" + "="*70)
         print("✅ البوت جاهز للاستخدام!")
         print("="*70)
@@ -45,49 +68,6 @@ async def post_init(application: Application) -> None:
         
     except Exception as e:
         logger.error(f"❌ خطأ في تهيئة البوت: {e}")
-        print(f"❌ خطأ في التهيئة: {e}")
-
-
-def setup_handlers(application: Application):
-    """إعداد جميع معالجات الأوامر"""
-    
-    # إنشاء معالجات الأوامر
-    message_handler = MessageHandler()
-    admin_handler = AdminHandler()
-    advanced_features = AdvancedFeatures()
-    
-    # ===== الأوامر العامة =====
-    application.add_handler(CommandHandler("start", message_handler.start))
-    application.add_handler(CommandHandler("help", message_handler.help_command))
-    application.add_handler(CommandHandler("stats", message_handler.stats))
-    application.add_handler(CommandHandler("settings", message_handler.settings))
-    
-    # ===== أوامر المسؤولين =====
-    application.add_handler(CommandHandler("enable", admin_handler.enable_bot))
-    application.add_handler(CommandHandler("disable", admin_handler.disable_bot))
-    application.add_handler(CommandHandler("sensitivity", admin_handler.set_sensitivity))
-    application.add_handler(CommandHandler("whitelist", admin_handler.manage_whitelist))
-    application.add_handler(CommandHandler("blacklist", admin_handler.manage_blacklist))
-    application.add_handler(CommandHandler("report", admin_handler.generate_report))
-    application.add_handler(CommandHandler("logs", admin_handler.show_logs))
-    
-    # ===== أوامر الكلمات المفتاحية =====
-    application.add_handler(CommandHandler("addkeyword", advanced_features.add_keyword))
-    application.add_handler(CommandHandler("removekeyword", advanced_features.remove_keyword))
-    application.add_handler(CommandHandler("keywords", advanced_features.list_keywords))
-    
-    # ===== أوامر التنظيف =====
-    cleanup_handlers = CleanupCommandHandler.get_handlers()
-    for handler in cleanup_handlers:
-        application.add_handler(handler)
-    
-    # ===== معالج الرسائل العام =====
-    application.add_handler(
-        TgMessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            message_handler.handle_message
-        )
-    )
 
 
 def main():
@@ -96,51 +76,73 @@ def main():
     # الحصول على رمز البوت
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
-        print("\n" + "="*70)
-        print("❌ خطأ: TELEGRAM_BOT_TOKEN غير موجود")
-        print("="*70)
-        print("\n📝 الحل:")
-        print("1. افتح ملف .env")
-        print("2. أضف السطر التالي:")
-        print("   TELEGRAM_BOT_TOKEN=your_token_here")
-        print("3. استبدل your_token_here برمز البوت الخاص بك")
-        print("\n💡 للحصول على رمز البوت:")
-        print("   - افتح تلقرام وابحث عن @BotFather")
-        print("   - أرسل /newbot واتبع التعليمات")
-        print("\n" + "="*70 + "\n")
+        logger.error("❌ TELEGRAM_BOT_TOKEN غير موجود في متغيرات البيئة")
+        print("\n⚠️  تأكد من إضافة TELEGRAM_BOT_TOKEN في ملف .env")
+        print("📝 اكتب: TELEGRAM_BOT_TOKEN=your_token_here")
         return
     
     print("\n" + "="*70)
     print("🚀 جاري بدء بوت حذف الإعلانات المزعجة...")
     print("="*70 + "\n")
     
-    try:
-        # إنشاء التطبيق
-        application = (
-            Application.builder()
-            .token(token)
-            .post_init(post_init)
-            .build()
+    # إنشاء التطبيق
+    application = (
+        Application.builder()
+        .token(token)
+        .post_init(post_init)
+        .build()
+    )
+    
+    # إنشاء معالجات الأوامر
+    message_handler = MessageHandler()
+    admin_handler = AdminHandler()
+    advanced_features = AdvancedFeatures()
+    
+    # ===== تسجيل معالجات الأوامر العامة =====
+    application.add_handler(CommandHandler("start", message_handler.start))
+    application.add_handler(CommandHandler("help", message_handler.help_command))
+    application.add_handler(CommandHandler("stats", message_handler.stats))
+    application.add_handler(CommandHandler("settings", message_handler.settings))
+    
+    # ===== تسجيل معالجات أوامر المسؤولين =====
+    application.add_handler(CommandHandler("enable", admin_handler.enable_bot))
+    application.add_handler(CommandHandler("disable", admin_handler.disable_bot))
+    application.add_handler(CommandHandler("sensitivity", admin_handler.set_sensitivity))
+    application.add_handler(CommandHandler("whitelist", admin_handler.manage_whitelist))
+    application.add_handler(CommandHandler("blacklist", admin_handler.manage_blacklist))
+    application.add_handler(CommandHandler("report", admin_handler.generate_report))
+    application.add_handler(CommandHandler("logs", admin_handler.show_logs))
+    
+    # ===== تسجيل معالجات أوامر الكلمات المفتاحية =====
+    application.add_handler(CommandHandler("addkeyword", advanced_features.add_keyword))
+    application.add_handler(CommandHandler("removekeyword", advanced_features.remove_keyword))
+    application.add_handler(CommandHandler("keywords", advanced_features.list_keywords))
+    
+    # ===== تسجيل معالجات أوامر التنظيف =====
+    cleanup_handlers = CleanupCommandHandler.get_handlers()
+    for handler in cleanup_handlers:
+        application.add_handler(handler)
+    
+    # ===== تسجيل معالج الرسائل العام =====
+    application.add_handler(
+        TgMessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            message_handler.handle_message
         )
-        
-        # إعداد المعالجات
-        setup_handlers(application)
-        
-        # تشغيل البوت
+    )
+    
+    # تشغيل البوت
+    try:
         print("✅ البوت يعمل الآن... اضغط Ctrl+C للإيقاف\n")
         application.run_polling()
-    
     except KeyboardInterrupt:
         print("\n" + "="*70)
         print("⛔ تم إيقاف البوت")
-        print("="*70 + "\n")
-    
+        print("="*70)
     except Exception as e:
-        print("\n" + "="*70)
-        print(f"❌ خطأ في تشغيل البوت: {e}")
-        print("="*70 + "\n")
-        logger.error(f"خطأ في تشغيل البوت: {e}", exc_info=True)
-        sys.exit(1)
+        logger.error(f"❌ خطأ في تشغيل البوت: {e}")
+        print(f"\n❌ خطأ: {e}")
+        raise
 
 
 if __name__ == '__main__':
