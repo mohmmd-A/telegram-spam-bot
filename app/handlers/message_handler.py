@@ -11,6 +11,8 @@ import logging
 
 from app.services.detection import detection_engine
 from app.services.database_service import DatabaseService
+from app.services.username_filter import username_filter
+from app.services.obfuscation_detector import obfuscation_detector
 from app.models.init_db import SessionLocal
 from app.utils.commands import CommandRegistry
 
@@ -54,6 +56,34 @@ class MessageHandler:
                     f"تم حذف رسالة من مستخدم في القائمة السوداء"
                 )
                 return
+            
+            # فحص اسم المستخدم للكلمات المزعجة
+            if message.from_user.username:
+                is_suspicious, keywords, confidence = username_filter.check_username_for_spam(
+                    message.from_user.username
+                )
+                
+                if is_suspicious and confidence > 0.5:
+                    # حفظ اسم المستخدم المشبوه
+                    risk_score, risk_level = username_filter.get_username_risk_score(
+                        message.from_user.username
+                    )
+                    
+                    username_filter.save_suspicious_username(
+                        db, chat_id, user_id, message.from_user.username,
+                        risk_score, f"كلمات مزعجة: {', '.join(keywords)}"
+                    )
+                    
+                    # تحديد المستخدم - حذف الرسالة
+                    await MessageHandler._delete_message(context, chat_id, message.message_id)
+                    DatabaseService.log_activity(
+                        db, chat_id, "auto_delete_suspicious_username",
+                        user_id, message.from_user.username,
+                        f"تم حذف الرسالة - اسم المستخدم مشبوه: {risk_level}"
+                    )
+                    
+                    logger.info(f"تم تحديد مستخدم مشبوه: {message.from_user.username}")
+                    return
             
             # كشف الإعلانات
             is_spam, confidence, keywords = detection_engine.detect_spam(

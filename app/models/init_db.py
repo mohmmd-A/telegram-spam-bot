@@ -95,11 +95,25 @@ class ActivityLog(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     chat_id = Column(Integer, index=True)
-    action = Column(String(255))
-    user_id = Column(Integer)
-    user_name = Column(String(255))
+    user_id = Column(Integer, index=True)
+    action = Column(String(100))
     details = Column(Text)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+
+class SuspiciousUsername(Base):
+    """أسماء المستخدمين المشبوهة"""
+    __tablename__ = "suspicious_usernames"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, index=True)
+    user_id = Column(Integer, index=True)
+    username = Column(String(255))
+    risk_score = Column(Float, default=0.0)
+    reason = Column(String(500))
+    is_limited = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 def init_db():
