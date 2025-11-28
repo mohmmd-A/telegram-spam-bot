@@ -1,3 +1,8 @@
+"""
+محرك الكشف الذكي المحسّن مع دعم النصوص المموهة
+Enhanced Smart Detection Engine with Obfuscated Text Support
+"""
+
 import json
 import re
 from typing import Dict, List, Tuple
@@ -7,13 +12,13 @@ from datetime import datetime, timedelta
 from app.services.advanced_detection import advanced_detector, TextNormalizer
 
 
-class SpamDetectionEngine:
-    """محرك الكشف الذكي عن الإعلانات المزعجة"""
+class EnhancedSpamDetectionEngine:
+    """محرك الكشف الذكي المحسّن عن الإعلانات المزعجة"""
     
     def __init__(self, keywords_file: str = "keywords.json"):
         self.keywords_file = keywords_file
         self.load_keywords()
-        self.message_history = {}  # لتخزين سجل الرسائل
+        self.message_history = {}
         
     def load_keywords(self):
         """تحميل الكلمات المفتاحية من الملف"""
@@ -34,16 +39,7 @@ class SpamDetectionEngine:
     def detect_spam(self, message: str, user_id: int, chat_id: int, 
                    sensitivity: float = 0.7) -> Tuple[bool, float, List[str]]:
         """
-        كشف ما إذا كانت الرسالة إعلان مزعج
-        
-        Args:
-            message: نص الرسالة
-            user_id: معرف المستخدم
-            chat_id: معرف القروب
-            sensitivity: مستوى الحساسية (0-1)
-            
-        Returns:
-            (is_spam, confidence_score, detected_keywords)
+        كشف ما إذا كانت الرسالة إعلان مزعج (مع دعم النصوص المموهة)
         """
         if not message:
             return False, 0.0, []
@@ -55,21 +51,26 @@ class SpamDetectionEngine:
         # 1. فحص الكلمات المفتاحية الطبية
         medical_score, medical_keywords = self._check_medical_keywords(message_lower)
         detected_keywords.extend(medical_keywords)
-        confidence_score += medical_score * 0.3
+        confidence_score += medical_score * 0.2
         
         # 2. فحص الأنماط المريبة (أرقام هواتف، روابط)
         suspicious_score, suspicious_items = self._check_suspicious_patterns(message)
         detected_keywords.extend(suspicious_items)
-        confidence_score += suspicious_score * 0.35
+        confidence_score += suspicious_score * 0.25
         
         # 3. فحص مؤشرات الإعلانات
         spam_indicator_score, indicators = self._check_spam_indicators(message_lower)
         detected_keywords.extend(indicators)
-        confidence_score += spam_indicator_score * 0.2
+        confidence_score += spam_indicator_score * 0.15
         
         # 4. فحص الرسائل المكررة
         duplicate_score = self._check_duplicate_messages(user_id, chat_id, message)
-        confidence_score += duplicate_score * 0.15
+        confidence_score += duplicate_score * 0.1
+        
+        # 5. الكشف المتقدم للنصوص المموهة والمشوهة
+        obfuscated_score, obfuscated_keywords = self._detect_obfuscated_spam(message)
+        detected_keywords.extend(obfuscated_keywords)
+        confidence_score += obfuscated_score * 0.3
         
         # تطبيع النتيجة
         confidence_score = min(confidence_score, 1.0)
@@ -82,6 +83,31 @@ class SpamDetectionEngine:
         
         return is_spam, confidence_score, detected_keywords
     
+    def _detect_obfuscated_spam(self, message: str) -> Tuple[float, List[str]]:
+        """كشف الإعلانات المموهة والمشوهة (مع حركات وخطوط ومسافات)"""
+        is_spam, confidence, _ = advanced_detector.detect_obfuscated_spam(
+            message, self.medical_keywords
+        )
+        
+        keywords = []
+        
+        # إذا تم اكتشاف إعلان مموه
+        if is_spam or confidence > 0.3:
+            obfuscation_indicators = advanced_detector.get_obfuscation_indicators(message)
+            
+            if obfuscation_indicators['has_extra_spaces']:
+                keywords.append("مسافات_زائدة")
+            if obfuscation_indicators['has_special_chars']:
+                keywords.append("أحرف_خاصة")
+            if obfuscation_indicators['has_diacritics']:
+                keywords.append("حركات_عربية")
+            
+            # إذا كانت درجة التمويه عالية
+            if obfuscation_indicators['obfuscation_score'] > 0.3:
+                keywords.append("تمويه_مرتفع")
+        
+        return confidence, keywords
+    
     def _check_medical_keywords(self, message: str) -> Tuple[float, List[str]]:
         """فحص الكلمات المفتاحية الطبية"""
         score = 0.0
@@ -92,14 +118,13 @@ class SpamDetectionEngine:
                 score += 0.2
                 found_keywords.append(keyword)
         
-        # تطبيع النتيجة
         if found_keywords:
             score = min(score, 1.0)
         
         return score, found_keywords
     
     def _check_suspicious_patterns(self, message: str) -> Tuple[float, List[str]]:
-        """فحص الأنماط المريبة مثل أرقام الهواتف والروابط"""
+        """فحص الأنماط المريبة"""
         score = 0.0
         found_patterns = []
         
@@ -112,7 +137,6 @@ class SpamDetectionEngine:
             except re.error:
                 continue
         
-        # تطبيع النتيجة
         if found_patterns:
             score = min(score, 1.0)
         
@@ -128,7 +152,6 @@ class SpamDetectionEngine:
                 score += 0.15
                 found_indicators.append(indicator)
         
-        # تطبيع النتيجة
         if found_indicators:
             score = min(score, 1.0)
         
@@ -142,7 +165,7 @@ class SpamDetectionEngine:
         if key not in self.message_history:
             self.message_history[key] = []
         
-        # تنظيف الرسائل القديمة (أكثر من 5 دقائق)
+        # تنظيف الرسائل القديمة
         self.message_history[key] = [
             (msg, timestamp) for msg, timestamp in self.message_history[key]
             if (current_time - timestamp).seconds < 300
@@ -152,11 +175,10 @@ class SpamDetectionEngine:
         similarity_score = 0.0
         for prev_message, _ in self.message_history[key]:
             similarity = SequenceMatcher(None, message, prev_message).ratio()
-            if similarity > 0.8:  # تشابه أكثر من 80%
+            if similarity > 0.8:
                 similarity_score = 0.4
                 break
         
-        # إضافة الرسالة الحالية للسجل
         self.message_history[key].append((message, current_time))
         
         return similarity_score
@@ -179,7 +201,7 @@ class SpamDetectionEngine:
         self._save_keywords()
     
     def _save_keywords(self):
-        """حفظ الكلمات المفتاحية في الملف"""
+        """حفظ الكلمات المفتاحية"""
         try:
             data = {
                 'medical_keywords': self.medical_keywords,
@@ -202,5 +224,5 @@ class SpamDetectionEngine:
         }
 
 
-# إنشاء مثيل عام من محرك الكشف
-detection_engine = SpamDetectionEngine()
+# إنشاء مثيل عام
+enhanced_detection_engine = EnhancedSpamDetectionEngine()
