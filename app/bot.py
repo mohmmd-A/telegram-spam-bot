@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 from app.handlers.message_handler import MessageHandler
 from app.handlers.admin_handler import AdminHandler, AdvancedFeatures
 from app.handlers.cleanup_handler import ImprovedCleanupHandler as CleanupHandler
+from app.handlers.scan_history_handler import ScanHistoryHandler
 from app.models.database import init_db
+import logging
 
 # تحميل متغيرات البيئة
 load_dotenv()
@@ -96,6 +98,17 @@ class SpamBot:
         )
         self.application.add_handler(
             CommandHandler("archive", CleanupHandler.archive_summary)
+        )
+        
+        # ========== أوامر مسح السجل ==========
+        self.application.add_handler(
+            CommandHandler("scan_history", ScanHistoryHandler.scan_history)
+        )
+        self.application.add_handler(
+            CommandHandler("manual_scan", ScanHistoryHandler.manual_scan)
+        )
+        self.application.add_handler(
+            CommandHandler("stop_scan", ScanHistoryHandler.stop_scan)
         )
         
         # ========== معالج الرسائل ==========
