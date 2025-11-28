@@ -5,7 +5,7 @@ Cleanup and Deletion Commands Handler - Fixed Version
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
-from app.models.database import SessionLocal, DeletedMessage
+from app.models.init_db import SessionLocal, DeletedMessage
 from datetime import datetime, timedelta
 import logging
 

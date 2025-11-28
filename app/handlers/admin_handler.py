@@ -5,7 +5,7 @@ Admin Commands Handler - Complete Version
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
-from app.models.database import SessionLocal
+from app.models.init_db import SessionLocal
 from app.services.database_service import DatabaseService
 import logging
 

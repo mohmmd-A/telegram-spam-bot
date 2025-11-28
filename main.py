@@ -12,11 +12,12 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler as TgMessageHandler, filters
 )
 
-# استيراد المعالجات
+# استيراد المعالجات والخدمات
 from app.handlers.message_handler import MessageHandler
 from app.handlers.admin_handler import AdminHandler, AdvancedFeatures
 from app.handlers.cleanup_handler import CleanupCommandHandler
 from app.utils.commands import CommandRegistry
+from app.models.init_db import init_db, SessionLocal
 
 # إعداد السجلات
 logging.basicConfig(
@@ -115,6 +116,13 @@ def main():
     print("="*70 + "\n")
     
     try:
+        # تهيئة قاعدة البيانات
+        print("📦 جاري إعداد قاعدة البيانات...")
+        if init_db():
+            print("✅ تم إعداد قاعدة البيانات بنجاح\n")
+        else:
+            print("⚠️ تحذير: قد يكون هناك مشكلة في قاعدة البيانات\n")
+        
         # إنشاء التطبيق
         application = (
             Application.builder()

@@ -131,7 +131,7 @@ class CleanupService:
         async def cleanup_job(context):
             db = None
             try:
-                from app.models.database import SessionLocal
+                from app.models.init_db import SessionLocal
                 db = SessionLocal()
                 
                 result = await CleanupService.cleanup_old_messages(

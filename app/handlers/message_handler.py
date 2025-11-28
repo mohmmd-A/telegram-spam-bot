@@ -11,7 +11,7 @@ import logging
 
 from app.services.detection import detection_engine
 from app.services.database_service import DatabaseService
-from app.models.database import SessionLocal
+from app.models.init_db import SessionLocal
 from app.utils.commands import CommandRegistry
 
 logger = logging.getLogger(__name__)

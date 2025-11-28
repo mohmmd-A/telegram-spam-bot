@@ -1,16 +1,59 @@
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import List, Optional, Dict
-import json
+"""
+خدمة إدارة قاعدة البيانات - النسخة الكاملة
+Database Service - Complete Version
+"""
 
-from app.models.database import (
-    DeletedMessage, UserStatistics, ChatSettings, 
-    WhitelistEntry, BlacklistEntry, ActivityLog
+from sqlalchemy.orm import Session
+from app.models.init_db import (
+    ChatSettings, DeletedMessage, WhitelistUser, BlacklistUser, Keyword, ActivityLog
 )
+from datetime import datetime, timedelta
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseService:
     """خدمة إدارة قاعدة البيانات"""
+    
+    # ===== إدارة إعدادات القروب =====
+    
+    @staticmethod
+    def get_or_create_chat_settings(db: Session, chat_id: int, chat_name: str = ""):
+        """الحصول على أو إنشاء إعدادات القروب"""
+        settings = db.query(ChatSettings).filter(ChatSettings.chat_id == chat_id).first()
+        
+        if not settings:
+            settings = ChatSettings(
+                chat_id=chat_id,
+                chat_name=chat_name,
+                is_enabled=True,
+                detection_sensitivity=0.7
+            )
+            db.add(settings)
+            db.commit()
+            logger.info(f"✅ تم إنشاء إعدادات جديدة للقروب {chat_id}")
+        
+        return settings
+    
+    @staticmethod
+    def set_chat_enabled(db: Session, chat_id: int, enabled: bool):
+        """تفعيل/تعطيل البوت في القروب"""
+        settings = DatabaseService.get_or_create_chat_settings(db, chat_id)
+        settings.is_enabled = enabled
+        db.commit()
+        return settings
+    
+    @staticmethod
+    def set_chat_sensitivity(db: Session, chat_id: int, sensitivity: float):
+        """تعديل حساسية الكشف"""
+        settings = DatabaseService.get_or_create_chat_settings(db, chat_id)
+        settings.detection_sensitivity = max(0.1, min(1.0, sensitivity))
+        db.commit()
+        return settings
+    
+    # ===== إدارة الرسائل المحذوفة =====
     
     @staticmethod
     def log_deleted_message(
@@ -20,248 +63,221 @@ class DatabaseService:
         user_id: int,
         user_name: str,
         message_text: str,
-        detected_keywords: List[str],
-        confidence_score: float,
-        deletion_reason: str = "spam_detected"
-    ) -> DeletedMessage:
+        keywords: list,
+        confidence: float
+    ):
         """تسجيل رسالة محذوفة"""
         deleted_msg = DeletedMessage(
             chat_id=chat_id,
             message_id=message_id,
             user_id=user_id,
             user_name=user_name,
-            message_text=message_text,
-            detected_keywords=json.dumps(detected_keywords, ensure_ascii=False),
-            confidence_score=confidence_score,
-            deletion_reason=deletion_reason
+            message_text=message_text[:500],  # أول 500 حرف فقط
+            detected_keywords=json.dumps(keywords),
+            confidence_score=confidence
         )
         db.add(deleted_msg)
         db.commit()
-        db.refresh(deleted_msg)
         return deleted_msg
     
     @staticmethod
-    def update_user_statistics(
-        db: Session,
-        chat_id: int,
-        user_id: int,
-        user_name: str,
-        increment_spam: bool = True,
-        increment_warning: bool = False
-    ) -> UserStatistics:
-        """تحديث إحصائيات المستخدم"""
-        stats = db.query(UserStatistics).filter(
-            UserStatistics.chat_id == chat_id,
-            UserStatistics.user_id == user_id
+    def get_deleted_messages(db: Session, chat_id: int, days: int = 7):
+        """الحصول على الرسائل المحذوفة"""
+        since = datetime.utcnow() - timedelta(days=days)
+        messages = db.query(DeletedMessage).filter(
+            DeletedMessage.chat_id == chat_id,
+            DeletedMessage.deleted_at >= since
+        ).all()
+        return messages
+    
+    # ===== إدارة القوائم البيضاء والسوداء =====
+    
+    @staticmethod
+    def add_user_to_whitelist(db: Session, chat_id: int, user_id: int, user_name: str = ""):
+        """إضافة مستخدم للقائمة البيضاء"""
+        # التحقق من عدم وجوده بالفعل
+        existing = db.query(WhitelistUser).filter(
+            WhitelistUser.chat_id == chat_id,
+            WhitelistUser.user_id == user_id
         ).first()
         
-        if not stats:
-            stats = UserStatistics(
-                chat_id=chat_id,
-                user_id=user_id,
-                user_name=user_name,
-                spam_count=1 if increment_spam else 0,
-                warning_count=1 if increment_warning else 0,
-                last_spam_at=datetime.utcnow() if increment_spam else None
-            )
-            db.add(stats)
-        else:
-            if increment_spam:
-                stats.spam_count += 1
-                stats.last_spam_at = datetime.utcnow()
-            if increment_warning:
-                stats.warning_count += 1
-            stats.updated_at = datetime.utcnow()
+        if existing:
+            return existing
         
-        db.commit()
-        db.refresh(stats)
-        return stats
-    
-    @staticmethod
-    def get_chat_settings(db: Session, chat_id: int) -> ChatSettings:
-        """الحصول على إعدادات القروب"""
-        settings = db.query(ChatSettings).filter(
-            ChatSettings.chat_id == chat_id
-        ).first()
-        
-        if not settings:
-            settings = ChatSettings(chat_id=chat_id)
-            db.add(settings)
-            db.commit()
-            db.refresh(settings)
-        
-        return settings
-    
-    @staticmethod
-    def update_chat_settings(
-        db: Session,
-        chat_id: int,
-        **kwargs
-    ) -> ChatSettings:
-        """تحديث إعدادات القروب"""
-        settings = DatabaseService.get_chat_settings(db, chat_id)
-        
-        for key, value in kwargs.items():
-            if hasattr(settings, key):
-                setattr(settings, key, value)
-        
-        settings.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(settings)
-        return settings
-    
-    @staticmethod
-    def add_to_whitelist(
-        db: Session,
-        chat_id: int,
-        reason: str,
-        user_id: Optional[int] = None,
-        keyword: Optional[str] = None
-    ) -> WhitelistEntry:
-        """إضافة مدخل إلى القائمة البيضاء"""
-        entry = WhitelistEntry(
+        whitelist = WhitelistUser(
             chat_id=chat_id,
             user_id=user_id,
-            keyword=keyword,
-            reason=reason
+            user_name=user_name
         )
-        db.add(entry)
+        db.add(whitelist)
         db.commit()
-        db.refresh(entry)
-        return entry
+        return whitelist
     
     @staticmethod
-    def add_to_blacklist(
-        db: Session,
-        chat_id: int,
-        reason: str,
-        user_id: Optional[int] = None,
-        keyword: Optional[str] = None
-    ) -> BlacklistEntry:
-        """إضافة مدخل إلى القائمة السوداء"""
-        entry = BlacklistEntry(
-            chat_id=chat_id,
-            user_id=user_id,
-            keyword=keyword,
-            reason=reason
-        )
-        db.add(entry)
+    def remove_user_from_whitelist(db: Session, chat_id: int, user_id: int):
+        """إزالة مستخدم من القائمة البيضاء"""
+        db.query(WhitelistUser).filter(
+            WhitelistUser.chat_id == chat_id,
+            WhitelistUser.user_id == user_id
+        ).delete()
         db.commit()
-        db.refresh(entry)
-        return entry
     
     @staticmethod
     def is_user_whitelisted(db: Session, chat_id: int, user_id: int) -> bool:
-        """التحقق من أن المستخدم في القائمة البيضاء"""
-        return db.query(WhitelistEntry).filter(
-            WhitelistEntry.chat_id == chat_id,
-            WhitelistEntry.user_id == user_id
-        ).first() is not None
+        """التحقق من وجود مستخدم في القائمة البيضاء"""
+        result = db.query(WhitelistUser).filter(
+            WhitelistUser.chat_id == chat_id,
+            WhitelistUser.user_id == user_id
+        ).first()
+        return result is not None
+    
+    @staticmethod
+    def add_user_to_blacklist(db: Session, chat_id: int, user_id: int, user_name: str = ""):
+        """إضافة مستخدم للقائمة السوداء"""
+        existing = db.query(BlacklistUser).filter(
+            BlacklistUser.chat_id == chat_id,
+            BlacklistUser.user_id == user_id
+        ).first()
+        
+        if existing:
+            return existing
+        
+        blacklist = BlacklistUser(
+            chat_id=chat_id,
+            user_id=user_id,
+            user_name=user_name
+        )
+        db.add(blacklist)
+        db.commit()
+        return blacklist
+    
+    @staticmethod
+    def remove_user_from_blacklist(db: Session, chat_id: int, user_id: int):
+        """إزالة مستخدم من القائمة السوداء"""
+        db.query(BlacklistUser).filter(
+            BlacklistUser.chat_id == chat_id,
+            BlacklistUser.user_id == user_id
+        ).delete()
+        db.commit()
     
     @staticmethod
     def is_user_blacklisted(db: Session, chat_id: int, user_id: int) -> bool:
-        """التحقق من أن المستخدم في القائمة السوداء"""
-        return db.query(BlacklistEntry).filter(
-            BlacklistEntry.chat_id == chat_id,
-            BlacklistEntry.user_id == user_id
-        ).first() is not None
+        """التحقق من وجود مستخدم في القائمة السوداء"""
+        result = db.query(BlacklistUser).filter(
+            BlacklistUser.chat_id == chat_id,
+            BlacklistUser.user_id == user_id
+        ).first()
+        return result is not None
+    
+    # ===== إدارة الكلمات المفتاحية =====
     
     @staticmethod
-    def is_keyword_whitelisted(db: Session, chat_id: int, keyword: str) -> bool:
-        """التحقق من أن الكلمة المفتاحية في القائمة البيضاء"""
-        return db.query(WhitelistEntry).filter(
-            WhitelistEntry.chat_id == chat_id,
-            WhitelistEntry.keyword == keyword
-        ).first() is not None
+    def add_keyword(db: Session, chat_id: int, keyword: str, is_custom: bool = True):
+        """إضافة كلمة مفتاحية"""
+        existing = db.query(Keyword).filter(
+            Keyword.chat_id == chat_id,
+            Keyword.keyword == keyword.lower()
+        ).first()
+        
+        if existing:
+            return existing
+        
+        kw = Keyword(
+            chat_id=chat_id,
+            keyword=keyword.lower(),
+            is_custom=is_custom
+        )
+        db.add(kw)
+        db.commit()
+        return kw
+    
+    @staticmethod
+    def remove_keyword(db: Session, chat_id: int, keyword: str):
+        """إزالة كلمة مفتاحية"""
+        db.query(Keyword).filter(
+            Keyword.chat_id == chat_id,
+            Keyword.keyword == keyword.lower()
+        ).delete()
+        db.commit()
+    
+    @staticmethod
+    def get_keywords(db: Session, chat_id: int) -> list:
+        """الحصول على الكلمات المفتاحية"""
+        keywords = db.query(Keyword).filter(Keyword.chat_id == chat_id).all()
+        return [kw.keyword for kw in keywords]
+    
+    # ===== سجل النشاطات =====
     
     @staticmethod
     def log_activity(
         db: Session,
         chat_id: int,
-        action_type: str,
-        details: str,
-        target_user_id: Optional[int] = None,
-        target_user_name: Optional[str] = None
-    ) -> ActivityLog:
+        action: str,
+        user_id: int = None,
+        user_name: str = "",
+        details: str = ""
+    ):
         """تسجيل نشاط"""
-        log_entry = ActivityLog(
+        log = ActivityLog(
             chat_id=chat_id,
-            action_type=action_type,
-            target_user_id=target_user_id,
-            target_user_name=target_user_name,
+            action=action,
+            user_id=user_id,
+            user_name=user_name,
             details=details
         )
-        db.add(log_entry)
+        db.add(log)
         db.commit()
-        db.refresh(log_entry)
-        return log_entry
+        return log
     
     @staticmethod
-    def get_chat_statistics(db: Session, chat_id: int, days: int = 7) -> Dict:
-        """الحصول على إحصائيات القروب"""
+    def get_activity_logs(db: Session, chat_id: int, days: int = 7) -> list:
+        """الحصول على سجل النشاطات"""
         since = datetime.utcnow() - timedelta(days=days)
+        logs = db.query(ActivityLog).filter(
+            ActivityLog.chat_id == chat_id,
+            ActivityLog.timestamp >= since
+        ).order_by(ActivityLog.timestamp.desc()).all()
         
-        total_deleted = db.query(DeletedMessage).filter(
-            DeletedMessage.chat_id == chat_id,
-            DeletedMessage.deleted_at >= since
+        return [
+            {
+                'action': log.action,
+                'user_name': log.user_name,
+                'timestamp': log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                'details': log.details
+            }
+            for log in logs
+        ]
+    
+    # ===== الإحصائيات =====
+    
+    @staticmethod
+    def get_chat_statistics(db: Session, chat_id: int) -> dict:
+        """الحصول على إحصائيات القروب"""
+        deleted_count = db.query(DeletedMessage).filter(
+            DeletedMessage.chat_id == chat_id
         ).count()
         
-        top_spammers = db.query(UserStatistics).filter(
-            UserStatistics.chat_id == chat_id
-        ).order_by(UserStatistics.spam_count.desc()).limit(5).all()
+        whitelist_count = db.query(WhitelistUser).filter(
+            WhitelistUser.chat_id == chat_id
+        ).count()
         
-        recent_activity = db.query(ActivityLog).filter(
-            ActivityLog.chat_id == chat_id,
-            ActivityLog.created_at >= since
-        ).order_by(ActivityLog.created_at.desc()).limit(10).all()
+        blacklist_count = db.query(BlacklistUser).filter(
+            BlacklistUser.chat_id == chat_id
+        ).count()
+        
+        keyword_count = db.query(Keyword).filter(
+            Keyword.chat_id == chat_id
+        ).count()
         
         return {
-            "total_deleted_messages": total_deleted,
-            "top_spammers": [
-                {
-                    "user_id": s.user_id,
-                    "user_name": s.user_name,
-                    "spam_count": s.spam_count,
-                    "warning_count": s.warning_count
-                }
-                for s in top_spammers
-            ],
-            "recent_activity": [
-                {
-                    "action_type": a.action_type,
-                    "target_user_name": a.target_user_name,
-                    "details": a.details,
-                    "created_at": a.created_at.isoformat()
-                }
-                for a in recent_activity
-            ],
-            "period_days": days
+            'deleted_count': deleted_count,
+            'detected_count': deleted_count,
+            'deletion_rate': 100.0 if deleted_count > 0 else 0,
+            'user_count': db.query(DeletedMessage.user_id).filter(
+                DeletedMessage.chat_id == chat_id
+            ).distinct().count(),
+            'whitelist_count': whitelist_count,
+            'blacklist_count': blacklist_count,
+            'keyword_count': keyword_count,
+            'top_keyword': 'لا توجد',
         }
-    
-    @staticmethod
-    def get_user_statistics(db: Session, chat_id: int, user_id: int) -> Optional[UserStatistics]:
-        """الحصول على إحصائيات المستخدم"""
-        return db.query(UserStatistics).filter(
-            UserStatistics.chat_id == chat_id,
-            UserStatistics.user_id == user_id
-        ).first()
-    
-    @staticmethod
-    def remove_from_whitelist(db: Session, entry_id: int) -> bool:
-        """إزالة مدخل من القائمة البيضاء"""
-        entry = db.query(WhitelistEntry).filter(WhitelistEntry.id == entry_id).first()
-        if entry:
-            db.delete(entry)
-            db.commit()
-            return True
-        return False
-    
-    @staticmethod
-    def remove_from_blacklist(db: Session, entry_id: int) -> bool:
-        """إزالة مدخل من القائمة السوداء"""
-        entry = db.query(BlacklistEntry).filter(BlacklistEntry.id == entry_id).first()
-        if entry:
-            db.delete(entry)
-            db.commit()
-            return True
-        return False
