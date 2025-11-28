@@ -6,8 +6,9 @@ from telegram.ext import (
 )
 from dotenv import load_dotenv
 
-from app.handlers.message_handler import MessageHandler, CommandHandler as BasicCommandHandler
+from app.handlers.message_handler import MessageHandler
 from app.handlers.admin_handler import AdminHandler, AdvancedFeatures
+from app.handlers.cleanup_handler import ImprovedCleanupHandler as CleanupHandler
 from app.models.database import init_db
 
 # تحميل متغيرات البيئة
@@ -43,47 +44,58 @@ class SpamBot:
         
         # ========== أوامر أساسية ==========
         self.application.add_handler(
-            CommandHandler("start", BasicCommandHandler.start_command)
+            CommandHandler("start", MessageHandler.start)
         )
         self.application.add_handler(
-            CommandHandler("help", BasicCommandHandler.help_command)
+            CommandHandler("help", MessageHandler.help_command)
         )
         self.application.add_handler(
-            CommandHandler("stats", BasicCommandHandler.stats_command)
+            CommandHandler("stats", MessageHandler.stats)
         )
         self.application.add_handler(
-            CommandHandler("settings", BasicCommandHandler.settings_command)
+            CommandHandler("settings", MessageHandler.settings)
         )
         
         # ========== أوامر المسؤولين ==========
         self.application.add_handler(
-            CommandHandler("whitelist", AdminHandler.whitelist_command)
+            CommandHandler("whitelist", AdminHandler.manage_whitelist)
         )
         self.application.add_handler(
-            CommandHandler("blacklist", AdminHandler.blacklist_command)
+            CommandHandler("blacklist", AdminHandler.manage_blacklist)
         )
         self.application.add_handler(
-            CommandHandler("sensitivity", AdminHandler.sensitivity_command)
+            CommandHandler("sensitivity", AdminHandler.set_sensitivity)
         )
         self.application.add_handler(
-            CommandHandler("enable", AdminHandler.enable_command)
+            CommandHandler("enable", AdminHandler.enable_bot)
         )
         self.application.add_handler(
-            CommandHandler("disable", AdminHandler.disable_command)
+            CommandHandler("disable", AdminHandler.disable_bot)
         )
         self.application.add_handler(
-            CommandHandler("report", AdminHandler.report_command)
+            CommandHandler("report", AdminHandler.generate_report)
         )
         self.application.add_handler(
-            CommandHandler("logs", AdminHandler.logs_command)
+            CommandHandler("logs", AdminHandler.show_logs)
         )
         
         # ========== المزايا المتقدمة ==========
         self.application.add_handler(
-            CommandHandler("addkeyword", AdvancedFeatures.add_keyword_command)
+            CommandHandler("addkeyword", AdvancedFeatures.add_keyword)
         )
         self.application.add_handler(
-            CommandHandler("removekeyword", AdvancedFeatures.removekeyword_command)
+            CommandHandler("removekeyword", AdvancedFeatures.remove_keyword)
+        )
+        
+        # ========== أوامر التنظيف ==========
+        self.application.add_handler(
+            CommandHandler("cleanup_old", CleanupHandler.cleanup_old_messages)
+        )
+        self.application.add_handler(
+            CommandHandler("cleanup_user", CleanupHandler.cleanup_user_messages)
+        )
+        self.application.add_handler(
+            CommandHandler("archive", CleanupHandler.archive_summary)
         )
         
         # ========== معالج الرسائل ==========

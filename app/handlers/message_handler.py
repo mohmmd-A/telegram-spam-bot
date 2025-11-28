@@ -87,7 +87,7 @@ class MessageHandler:
             
             # كشف الإعلانات
             is_spam, confidence, keywords = detection_engine.detect_spam(
-                message_text, user_id, chat_id, settings.sensitivity
+                message_text, user_id, chat_id, settings.detection_sensitivity
             )
             
             if is_spam:
@@ -209,7 +209,7 @@ class MessageHandler:
 
 🔧 **الحالة:**
 • البوت: {'✅ مفعل' if settings.is_enabled else '❌ معطل'}
-• حساسية الكشف: {settings.sensitivity * 100:.0f}%
+• حساسية الكشف: {settings.detection_sensitivity * 100:.0f}%
 
 📋 **الإعدادات:**
 • حذف تلقائي: {'✅ مفعل' if settings.auto_delete else '❌ معطل'}
