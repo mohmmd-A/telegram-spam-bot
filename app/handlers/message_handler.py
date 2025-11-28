@@ -95,10 +95,16 @@ class MessageHandler:
                 await MessageHandler._delete_message(context, chat_id, message.message_id)
                 
                 # تسجيل النشاط
-                DatabaseService.log_deleted_message(
-                    db, chat_id, message.message_id, user_id, user_name,
-                    message_text, keywords, confidence
-                )
+                try:
+                    DatabaseService.log_deleted_message(
+                        db, chat_id, message.message_id, user_id, user_name,
+                        message_text, keywords, confidence
+                    )
+                    logger.info(f"✅ تم تسجيل رسالة مزعجة: chat_id={chat_id}, msg_id={message.message_id}")
+                except Exception as db_error:
+                    logger.error(f"❌ خطأ في تسجيل الرسالة: {db_error}")
+                    import traceback
+                    traceback.print_exc()
                 
                 # إرسال إشعار للمسؤولين
                 await MessageHandler._notify_admins(
