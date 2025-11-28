@@ -69,7 +69,7 @@ class MessageDeletionHandler:
                 "can_delete_messages": bot_member.can_delete_messages,
                 "can_restrict_members": bot_member.can_restrict_members,
                 "can_pin_messages": bot_member.can_pin_messages,
-                "is_administrator": bot_member.status in [ChatMember.ADMINISTRATOR, ChatMember.CREATOR],
+                "is_administrator": bot_member.status in [ChatMember.ADMINISTRATOR, ChatMember.OWNER],
                 "status": bot_member.status
             }
             
@@ -99,8 +99,8 @@ class MessageDeletionHandler:
             user_member = await context.bot.get_chat_member(chat_id, user_id)
             
             permissions = {
-                "is_administrator": user_member.status in [ChatMember.ADMINISTRATOR, ChatMember.CREATOR],
-                "is_creator": user_member.status == ChatMember.CREATOR,
+                "is_administrator": user_member.status in [ChatMember.ADMINISTRATOR, ChatMember.OWNER],
+                "is_creator": user_member.status == ChatMember.OWNER,
                 "can_delete_messages": user_member.can_delete_messages,
                 "status": user_member.status
             }
