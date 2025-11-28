@@ -1,6 +1,6 @@
 """
-معالج التنظيف المحسّن
-Improved Cleanup Handler
+معالج التنظيف المحسّن - نسخة محسّنة
+Improved Cleanup Handler - Enhanced Version
 """
 
 from telegram import Update, ChatMember
@@ -15,14 +15,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class ImprovedCleanupHandler:
+class ImprovedCleanupHandlerV2:
     """معالج تنظيف محسّن مع حذف فعلي للرسائل المزعجة"""
     
     @staticmethod
     async def cleanup_old_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
-        /cleanup_old - حذف الرسائل الإعلانية القديمة
-        الاستخدام: /cleanup_old 14
+        /cleanup_old - حذف الرسائل المزعجة من آخر N يوم
+        الاستخدام: /cleanup_old 7  (آخر 7 أيام)
+        الاستخدام: /cleanup_old 30 (آخر 30 يوم)
         """
         if not update.message or not update.effective_chat:
             return
@@ -160,29 +161,39 @@ class ImprovedCleanupHandler:
         # التحقق من صلاحيات المستخدم
         user_perms = await message_deletion_handler.check_user_permissions(context, chat_id, user_id)
         if not user_perms["is_administrator"]:
-            await update.message.reply_text("❌ يجب أن تكون مسؤول في القروب")
-            return
-        
-        # الحصول على معرف المستخدم المراد حذف رسائله
-        if not context.args or not context.args[0].isdigit():
             await update.message.reply_text(
-                "❌ **الاستخدام:** `/cleanup_user <user_id>`\n\n"
-                "**مثال:** `/cleanup_user 123456789`",
-                parse_mode="Markdown"
+                "❌ عذراً، يجب أن تكون مسؤول في القروب لاستخدام هذا الأمر."
             )
             return
         
-        target_user_id = int(context.args[0])
+        # التحقق من صلاحيات البوت
+        bot_perms = await message_deletion_handler.check_bot_permissions(context, chat_id)
+        if not bot_perms["can_delete_messages"]:
+            await update.message.reply_text("❌ البوت لا يملك صلاحية حذف الرسائل")
+            return
         
-        # إرسال رسالة الانتظار
+        # الحصول على معرف المستخدم المراد حذف رسائله
+        if not context.args:
+            await update.message.reply_text(
+                "❌ الرجاء تحديد معرف المستخدم\n"
+                "الاستخدام: /cleanup_user <user_id>"
+            )
+            return
+        
+        try:
+            target_user_id = int(context.args[0])
+        except ValueError:
+            await update.message.reply_text("❌ معرف المستخدم غير صحيح")
+            return
+        
         status_msg = await update.message.reply_text(
-            f"⏳ جاري حذف رسائل المستخدم {target_user_id}..."
+            f"⏳ **جاري حذف رسائل المستخدم {target_user_id}...**"
         )
         
         db = SessionLocal()
         
         try:
-            # الحصول على رسائل المستخدم
+            # الحصول على رسائل المستخدم المزعجة
             user_messages = db.query(DeletedMessage).filter(
                 DeletedMessage.chat_id == chat_id,
                 DeletedMessage.user_id == target_user_id
@@ -190,11 +201,13 @@ class ImprovedCleanupHandler:
             
             if not user_messages:
                 await status_msg.edit_text(
-                    f"ℹ️ لم يتم العثور على رسائل للمستخدم {target_user_id}"
+                    f"ℹ️ **لا توجد رسائل مزعجة لهذا المستخدم**\n\n"
+                    f"معرف المستخدم: {target_user_id}"
                 )
                 db.close()
                 return
             
+            total_messages = len(user_messages)
             message_ids = [msg.message_id for msg in user_messages]
             
             # حذف الرسائل
@@ -211,19 +224,19 @@ class ImprovedCleanupHandler:
             
             db.commit()
             
-            # النتيجة
             response = (
-                f"✅ **تم الحذف بنجاح!**\n\n"
+                f"✅ **تم حذف رسائل المستخدم بنجاح!**\n\n"
                 f"📊 **الإحصائيات:**\n"
                 f"• تم حذف: {stats['deleted']} رسالة\n"
-                f"• فشل: {stats['failed']} رسالة\n"
-                f"• إجمالي: {stats['total']} رسالة"
+                f"• فشل الحذف: {stats['failed']} رسالة\n"
+                f"• معرف المستخدم: {target_user_id}"
             )
             
             await status_msg.edit_text(response)
+            logger.info(f"✅ تم حذف {stats['deleted']} رسالة للمستخدم {target_user_id}")
         
         except Exception as e:
-            logger.error(f"خطأ في حذف رسائل المستخدم: {e}")
+            logger.error(f"❌ خطأ في حذف رسائل المستخدم: {e}")
             await status_msg.edit_text(f"❌ حدث خطأ: {str(e)}")
         
         finally:
@@ -232,75 +245,60 @@ class ImprovedCleanupHandler:
     @staticmethod
     async def archive_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
-        /archive_summary - عرض ملخص الرسائل المحذوفة
+        /archive - عرض ملخص الرسائل المحذوفة
         """
         if not update.message or not update.effective_chat:
             return
         
         chat_id = update.effective_chat.id
+        user_id = update.effective_user.id
         
-        # الحصول على عدد الأيام من الأمر
-        days = 7  # القيمة الافتراضية
-        if context.args and context.args[0].isdigit():
-            days = int(context.args[0])
+        # التحقق من صلاحيات المستخدم
+        user_perms = await message_deletion_handler.check_user_permissions(context, chat_id, user_id)
+        if not user_perms["is_administrator"]:
+            await update.message.reply_text(
+                "❌ عذراً، يجب أن تكون مسؤول في القروب لاستخدام هذا الأمر."
+            )
+            return
         
         db = SessionLocal()
         
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            # إحصائيات الحذف
+            total_deleted = db.query(DeletedMessage).filter(
+                DeletedMessage.chat_id == chat_id
+            ).count()
             
-            # الحصول على الإحصائيات
-            deleted_messages = db.query(DeletedMessage).filter(
+            # آخر 7 أيام
+            week_ago = datetime.utcnow() - timedelta(days=7)
+            deleted_week = db.query(DeletedMessage).filter(
                 DeletedMessage.chat_id == chat_id,
-                DeletedMessage.deleted_at >= cutoff_date
-            ).all()
+                DeletedMessage.deleted_at >= week_ago
+            ).count()
             
-            if not deleted_messages:
-                await update.message.reply_text(
-                    f"ℹ️ لا توجد رسائل محذوفة في آخر {days} يوم"
-                )
-                db.close()
-                return
+            # آخر 30 يوم
+            month_ago = datetime.utcnow() - timedelta(days=30)
+            deleted_month = db.query(DeletedMessage).filter(
+                DeletedMessage.chat_id == chat_id,
+                DeletedMessage.deleted_at >= month_ago
+            ).count()
             
-            # حساب الإحصائيات
-            total_deleted = len(deleted_messages)
-            unique_users = len(set(msg.user_id for msg in deleted_messages))
-            
-            # الكلمات الأكثر شيوعاً
-            all_keywords = []
-            for msg in deleted_messages:
-                if msg.keywords:
-                    all_keywords.extend(msg.keywords.split(","))
-            
-            keyword_counts = {}
-            for keyword in all_keywords:
-                keyword = keyword.strip()
-                keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
-            
-            top_keywords = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-            
-            # بناء الرد
-            summary = (
-                f"📊 **ملخص الرسائل المحذوفة (آخر {days} يوم)**\n\n"
-                f"📈 **الإحصائيات:**\n"
-                f"• إجمالي المحذوفة: {total_deleted}\n"
-                f"• عدد المستخدمين: {unique_users}\n\n"
+            response = (
+                f"📊 **ملخص الرسائل المحذوفة**\n\n"
+                f"• إجمالي المحذوفة: {total_deleted} رسالة\n"
+                f"• آخر 7 أيام: {deleted_week} رسالة\n"
+                f"• آخر 30 يوم: {deleted_month} رسالة\n\n"
+                f"💡 **الأوامر المتاحة:**\n"
+                f"• `/cleanup_old 7` - حذف الرسائل المزعجة من آخر 7 أيام\n"
+                f"• `/cleanup_old 30` - حذف الرسائل المزعجة من آخر 30 يوم\n"
+                f"• `/cleanup_user <id>` - حذف رسائل مستخدم معين"
             )
             
-            if top_keywords:
-                summary += f"🔑 **أكثر الكلمات المزعجة:**\n"
-                for keyword, count in top_keywords:
-                    summary += f"• {keyword}: {count}\n"
-            
-            await update.message.reply_text(summary)
+            await update.message.reply_text(response)
         
         except Exception as e:
-            logger.error(f"خطأ في الحصول على الملخص: {e}")
+            logger.error(f"❌ خطأ في الحصول على الملخص: {e}")
             await update.message.reply_text(f"❌ حدث خطأ: {str(e)}")
         
         finally:
             db.close()
-
-
-# إنشاء نسخة واحدة من المعالج
-improved_cleanup_handler = ImprovedCleanupHandler()
