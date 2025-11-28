@@ -64,7 +64,7 @@ class CleanupCommandHandler:
             # الحصول على الرسائل القديمة من قاعدة البيانات
             old_messages = db.query(DeletedMessage).filter(
                 DeletedMessage.chat_id == update.effective_chat.id,
-                DeletedMessage.timestamp < cutoff_date
+                DeletedMessage.deleted_at < cutoff_date
             ).all()
             
             if not old_messages:
@@ -224,7 +224,7 @@ class CleanupCommandHandler:
             # الحصول على الرسائل من قاعدة البيانات
             messages = db.query(DeletedMessage).filter(
                 DeletedMessage.chat_id == update.effective_chat.id,
-                DeletedMessage.timestamp >= cutoff_date
+                DeletedMessage.deleted_at >= cutoff_date
             ).all()
             
             if not messages:

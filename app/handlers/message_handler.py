@@ -35,7 +35,7 @@ class MessageHandler:
         db = SessionLocal()
         try:
             # الحصول على إعدادات القروب
-            settings = DatabaseService.get_chat_settings(db, chat_id)
+            settings = DatabaseService.get_or_create_chat_settings(db, chat_id)
             
             # التحقق من أن البوت مفعل
             if not settings.is_enabled:
@@ -50,8 +50,8 @@ class MessageHandler:
                 await MessageHandler._delete_message(context, chat_id, message.message_id)
                 DatabaseService.log_activity(
                     db, chat_id, "auto_delete_blacklist",
-                    f"تم حذف رسالة من مستخدم في القائمة السوداء",
-                    user_id, user_name
+                    user_id, user_name,
+                    f"تم حذف رسالة من مستخدم في القائمة السوداء"
                 )
                 return
             
@@ -172,7 +172,7 @@ class MessageHandler:
             chat_id = update.effective_chat.id
             
             # الحصول على إعدادات القروب
-            settings = DatabaseService.get_chat_settings(db, chat_id)
+            settings = DatabaseService.get_or_create_chat_settings(db, chat_id)
             
             settings_text = f"""
 ⚙️ **إعدادات البوت:**
@@ -184,7 +184,7 @@ class MessageHandler:
 📋 **الإعدادات:**
 • حذف تلقائي: {'✅ مفعل' if settings.auto_delete else '❌ معطل'}
 • إشعارات: {'✅ مفعلة' if settings.notify_admins else '❌ معطلة'}
-• تسجيل النشاط: {'✅ مفعل' if settings.log_activity else '❌ معطل'}
+• تسجيل النشاط: ✅ مفعل
 
 💡 **لتعديل الإعدادات:**
 استخدم الأوامر التالية:
