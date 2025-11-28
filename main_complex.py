@@ -1,15 +1,13 @@
 """
-ملف البدء الرئيسي - النسخة المبسطة والمصححة
-Main Entry Point - Simplified and Fixed Version
+ملف البدء الرئيسي - النسخة المحدثة
+Main Entry Point - Updated Version
 """
 
 import os
 import logging
 from dotenv import load_dotenv
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler as TgMessageHandler, filters
-)
-from app.handlers.message_handler import MessageHandler
+from telegram.ext import Application, CommandHandler, MessageHandler as TgMessageHandler, filters
+from app.handlers.message_handler import MessageHandler, CommandHandler as BasicCommandHandler
 from app.handlers.admin_handler import AdminHandler, AdvancedFeatures
 from app.handlers.cleanup_handler import CleanupCommandHandler
 from app.utils.commands import CommandRegistry
@@ -78,7 +76,6 @@ def main():
     if not token:
         logger.error("❌ TELEGRAM_BOT_TOKEN غير موجود في متغيرات البيئة")
         print("\n⚠️  تأكد من إضافة TELEGRAM_BOT_TOKEN في ملف .env")
-        print("📝 اكتب: TELEGRAM_BOT_TOKEN=your_token_here")
         return
     
     print("\n" + "="*70)
@@ -98,32 +95,60 @@ def main():
     admin_handler = AdminHandler()
     advanced_features = AdvancedFeatures()
     
-    # ===== تسجيل معالجات الأوامر العامة =====
-    application.add_handler(CommandHandler("start", message_handler.start))
-    application.add_handler(CommandHandler("help", message_handler.help_command))
-    application.add_handler(CommandHandler("stats", message_handler.stats))
-    application.add_handler(CommandHandler("settings", message_handler.settings))
+    # تسجيل معالجات الأوامر العامة
+    application.add_handler(
+        CommandHandler("start", message_handler.start)
+    )
+    application.add_handler(
+        CommandHandler("help", message_handler.help_command)
+    )
+    application.add_handler(
+        CommandHandler("stats", message_handler.stats)
+    )
+    application.add_handler(
+        CommandHandler("settings", message_handler.settings)
+    )
     
-    # ===== تسجيل معالجات أوامر المسؤولين =====
-    application.add_handler(CommandHandler("enable", admin_handler.enable_bot))
-    application.add_handler(CommandHandler("disable", admin_handler.disable_bot))
-    application.add_handler(CommandHandler("sensitivity", admin_handler.set_sensitivity))
-    application.add_handler(CommandHandler("whitelist", admin_handler.manage_whitelist))
-    application.add_handler(CommandHandler("blacklist", admin_handler.manage_blacklist))
-    application.add_handler(CommandHandler("report", admin_handler.generate_report))
-    application.add_handler(CommandHandler("logs", admin_handler.show_logs))
+    # تسجيل معالجات أوامر المسؤولين
+    application.add_handler(
+        CommandHandler("enable", admin_handler.enable_bot)
+    )
+    application.add_handler(
+        CommandHandler("disable", admin_handler.disable_bot)
+    )
+    application.add_handler(
+        CommandHandler("sensitivity", admin_handler.set_sensitivity)
+    )
+    application.add_handler(
+        CommandHandler("whitelist", admin_handler.manage_whitelist)
+    )
+    application.add_handler(
+        CommandHandler("blacklist", admin_handler.manage_blacklist)
+    )
+    application.add_handler(
+        CommandHandler("report", admin_handler.generate_report)
+    )
+    application.add_handler(
+        CommandHandler("logs", admin_handler.show_logs)
+    )
     
-    # ===== تسجيل معالجات أوامر الكلمات المفتاحية =====
-    application.add_handler(CommandHandler("addkeyword", advanced_features.add_keyword))
-    application.add_handler(CommandHandler("removekeyword", advanced_features.remove_keyword))
-    application.add_handler(CommandHandler("keywords", advanced_features.list_keywords))
+    # تسجيل معالجات أوامر الكلمات المفتاحية
+    application.add_handler(
+        CommandHandler("addkeyword", advanced_features.add_keyword)
+    )
+    application.add_handler(
+        CommandHandler("removekeyword", advanced_features.remove_keyword)
+    )
+    application.add_handler(
+        CommandHandler("keywords", advanced_features.list_keywords)
+    )
     
-    # ===== تسجيل معالجات أوامر التنظيف =====
+    # تسجيل معالجات أوامر التنظيف
     cleanup_handlers = CleanupCommandHandler.get_handlers()
     for handler in cleanup_handlers:
         application.add_handler(handler)
     
-    # ===== تسجيل معالج الرسائل العام =====
+    # تسجيل معالج الرسائل العام
     application.add_handler(
         TgMessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -133,7 +158,6 @@ def main():
     
     # تشغيل البوت
     try:
-        print("✅ البوت يعمل الآن... اضغط Ctrl+C للإيقاف\n")
         application.run_polling()
     except KeyboardInterrupt:
         print("\n" + "="*70)
@@ -141,7 +165,6 @@ def main():
         print("="*70)
     except Exception as e:
         logger.error(f"❌ خطأ في تشغيل البوت: {e}")
-        print(f"\n❌ خطأ: {e}")
         raise
 
 
